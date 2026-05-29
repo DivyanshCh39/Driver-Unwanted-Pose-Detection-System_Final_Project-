@@ -97,8 +97,7 @@ def gen_frames(user_email):
     if user_email.endswith("@poseguard.com"):
         return
 
-    unwanted_pose_count = 0
-    threshold = 10
+    frame_history = []  # Maintain last 15 processed frames
     last_alert_time = datetime.now()
     cooldown_seconds = 10
     sound_thread = None
@@ -129,17 +128,22 @@ def gen_frames(user_email):
             color = (0, 0, 255) if is_unwanted else (0, 255, 0)
             cv2.putText(frame, label, (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 0.9, color, 2)
 
-            if is_unwanted:
-                unwanted_pose_count += 1
-            else:
-                unwanted_pose_count = 0
+            # Update history buffer
+            frame_history.append(is_unwanted)
+            if len(frame_history) > 15:
+                frame_history.pop(0)
+
+            # Stop sound alert if the current frame is safe/normal
+            if not is_unwanted:
                 if sound_thread and sound_thread.is_alive():
                     sound_stop_event.set()
 
             current_time = datetime.now()
             time_since_last_alert = (current_time - last_alert_time).total_seconds()
 
-            if unwanted_pose_count > threshold and time_since_last_alert >= cooldown_seconds:
+            # Trigger logic: at least 12 of the last 15 frames are distracted (unwanted)
+            distracted_count = frame_history.count(True)
+            if distracted_count >= 12 and time_since_last_alert >= cooldown_seconds:
                 timestamp = current_time.strftime("%Y%m%d_%H%M%S")
                 filename = f"{user_email}_{timestamp}.jpg"
                 image_path = f"static/screenshots/{filename}"
@@ -162,7 +166,8 @@ def gen_frames(user_email):
                     sound_thread.start()
                 
                 last_alert_time = current_time
-                unwanted_pose_count = 0
+                # Clear the history after alert is triggered so we don't spam alerts immediately
+                frame_history.clear()
 
             ret, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])  # Reduce JPEG quality for faster transmission
             frame_bytes = buffer.tobytes()

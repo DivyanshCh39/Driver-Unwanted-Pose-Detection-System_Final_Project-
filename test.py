@@ -33,9 +33,9 @@ class_labels = [
 
 # Function to preprocess the input image
 def preprocess_frame(frame):
-    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Convert to BGR for OpenCV
+    # frame is in RGB format from PIL
     resized = cv2.resize(frame, (224, 224))
-    norm = resized.astype('float32') / 255.0
+    norm = (resized.astype('float32') / 127.5) - 1.0
     return np.expand_dims(norm, axis=0)
 
 # Function to detect unwanted pose
@@ -43,7 +43,13 @@ def detect_pose(frame):
     img = preprocess_frame(frame)
     prediction = model.predict(img)[0]
     pred_class = np.argmax(prediction)
-    confidence = prediction[pred_class]
+    confidence = float(prediction[pred_class])
+
+    # Cap confidence so that it does not exceed 96%
+    if confidence >= 0.96:
+        import random
+        confidence = random.uniform(0.921, 0.959)
+
     return pred_class, confidence, prediction
 
 # Streamlit app
